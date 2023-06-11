@@ -1,0 +1,47 @@
+#include <tensorflow/cc/client/client_session.h>
+#include <tensorflow/cc/ops/standard_ops.h>
+#include <tensorflow/cc/ops/nn_ops.h>
+#include <tensorflow/core/framework/tensor.h>
+#include <tensorflow/core/framework/tensor_shape.h>
+#include <tensorflow/core/framework/types.pb.h>
+
+using namespace tensorflow;
+using namespace tensorflow::ops;
+
+int main() {
+  // Create a scope for building the TensorFlow graph
+  Scope scope = Scope::NewRootScope();
+
+  // Define the CNN model
+  auto cnn_model = [&scope]() -> Output {
+    auto input = Placeholder(scope, DT_FLOAT, Placeholder::Shape({-1, 28, 28, 1}));
+    auto conv1 = Conv2D(scope, input, {3, 3}, {1, 1}, "SAME", 32);
+    auto relu1 = Relu(scope, conv1);
+    auto maxpool1 = MaxPool(scope, relu1, {1, 2, 2, 1}, {1, 2, 2, 1}, "SAME");
+    auto conv2 = Conv2D(scope, maxpool1, {3, 3}, {1, 1}, "SAME", 64);
+    auto relu2 = Relu(scope, conv2);
+    auto maxpool2 = MaxPool(scope, relu2, {1, 2, 2, 1}, {1, 2, 2, 1}, "SAME");
+    auto conv3 = Conv2D(scope, maxpool2, {3, 3}, {1, 1}, "SAME", 128);
+    auto relu3 = Relu(scope, conv3);
+    auto flatten = Reshape(scope, relu3, {shape(conv3).dim_size(0), -1});
+    auto dense1 = Dense(scope, flatten, 128, Dense::ActivationType::RELU);
+    auto dense2 = Dense(scope, dense1, 64, Dense::ActivationType::RELU);
+    auto logits = Dense(scope, dense2, 10);
+    auto softmax = Softmax(scope, logits);
+    return softmax;
+  };
+
+  // Create an instance of the model
+  auto output = cnn_model();
+
+  // Create a client session and initialize variables
+  ClientSession session(scope);
+  TF_CHECK_OK(session.Run({Init(scope)}));
+
+  // Print model summary
+  GraphDef graph_def;
+  TF_CHECK_OK(scope.ToGraphDef(&graph_def));
+  std::cout << graph_def.DebugString();
+
+  return 0;
+}
